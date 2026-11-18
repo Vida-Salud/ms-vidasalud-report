@@ -1,0 +1,47 @@
+package cl.duoc.ms_vidasalud_report;
+
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noFields;
+
+class ArquitecturaTest {
+
+    private static final JavaClasses CLASES = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPackages("cl.duoc.ms_vidasalud_report");
+
+    @Test
+    void sinInyeccionPorCampo() {
+        noFields().should().beAnnotatedWith(Autowired.class)
+                .because("las dependencias se inyectan por constructor")
+                .check(CLASES);
+    }
+
+    /** Aún no hay controladores: por ahora la regla la cumplen los consumidores de Kafka. */
+    @Test
+    void controladoresYConsumidoresDependenDeInterfaces() {
+        noClasses().that().resideInAnyPackage("..controller..", "..messaging..")
+                .should().dependOnClassesThat().haveSimpleNameEndingWith("Impl")
+                .because("los controladores y consumidores dependen de interfaces, no de implementaciones")
+                .check(CLASES);
+    }
+
+    @Test
+    void laHoraSaleDelRelojInyectado() {
+        noClasses().that().resideOutsideOfPackage("..model..")
+                .should().callMethod(LocalDateTime.class, "now")
+                .orShould().callMethod(LocalDate.class, "now")
+                .orShould().callMethod(Instant.class, "now")
+                .because("la hora se obtiene de un Clock inyectado")
+                .check(CLASES);
+    }
+}
