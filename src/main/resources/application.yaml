@@ -1,3 +1,54 @@
+server:
+  port: 8094
+
 spring:
+  config:
+    import: optional:file:.env[.properties]   # solo para correr desde el IDE
   application:
     name: ms-vidasalud-report
+
+  datasource:
+    url: jdbc:oracle:thin:@//${DB_HOST:localhost}:${DB_PORT:1521}/${DB_SERVICE:XEPDB1}
+    username: ${DB_USERNAME:vidasalud}
+    password: ${DB_PASSWORD}
+    driver-class-name: oracle.jdbc.OracleDriver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
+  kafka:
+    # Brokers del clúster Kafka. El cliente solo necesita uno vivo para descubrir el resto.
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092,localhost:9093,localhost:9094}
+    consumer:
+      group-id: report-kpis
+      # Un grupo nuevo lee el tópico desde el principio para reconstruir las proyecciones.
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # ErrorHandlingDeserializer envuelve al deserializador JSON: un mensaje mal formado no tumba
+      # el consumidor, llega al DefaultErrorHandler y de ahí al DLT.
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+        # appointments publica sin headers de tipo: el tipo destino se fija aquí.
+        spring.json.value.default.type: cl.duoc.ms_vidasalud_report.messaging.dto.EventoAtencion
+        spring.json.use.type.headers: false
+    listener:
+      # Una hebra por partición del tópico (3).
+      concurrency: 3
+
+vidasalud:
+  kafka:
+    topico-eventos: appointments.events
+    topico-dlt: appointments.events.DLT
+
+logging:
+  pattern:
+    correlation: "[%X{traceId:-}] "
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true   # /actuator/health/liveness y /actuator/health/readiness
