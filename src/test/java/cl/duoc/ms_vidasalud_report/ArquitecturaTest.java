@@ -26,7 +26,6 @@ class ArquitecturaTest {
                 .check(CLASES);
     }
 
-    /** Aún no hay controladores: por ahora la regla la cumplen los consumidores de Kafka. */
     @Test
     void controladoresYConsumidoresDependenDeInterfaces() {
         noClasses().that().resideInAnyPackage("..controller..", "..messaging..")
