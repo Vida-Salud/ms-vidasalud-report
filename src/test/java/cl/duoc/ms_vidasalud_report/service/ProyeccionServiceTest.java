@@ -147,7 +147,7 @@ class ProyeccionServiceTest {
     static EventoAtencion evento(String eventId, String type, Long atencionId, String estado,
                                  String estadoAnterior, Instant timestamp) {
         return new EventoAtencion(1, eventId, type, timestamp, "atencion-" + atencionId, "trace-1",
-                new DatosEventoAtencion(atencionId, "Ana", "Dental", "Box 3",
+                new DatosEventoAtencion(atencionId, "Dental", "Box 3",
                         LocalDateTime.of(2026, 11, 20, 10, 30), estado, estadoAnterior,
                         new ActorEvento("oid-op", "Olga Operadora", "Operador")));
     }

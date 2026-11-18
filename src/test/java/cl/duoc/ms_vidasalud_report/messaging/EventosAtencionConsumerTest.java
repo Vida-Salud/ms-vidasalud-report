@@ -51,7 +51,7 @@ class EventosAtencionConsumerTest {
     void eventoInvalidoLanzaExcepcionConElDetalleYNoLlamaAlServicio() {
         var evento = new EventoAtencion(1, " ", EventoAtencion.TYPE_CREADA, Instant.parse("2026-11-10T12:00:00Z"),
                 null, null,
-                new DatosEventoAtencion(null, "Ana", "Dental", null, null, "", null, null));
+                new DatosEventoAtencion(null, "Dental", null, null, "", null, null));
 
         assertThatThrownBy(() -> consumer.consumir(registro(evento)))
                 .isInstanceOf(EventoInvalidoException.class)
@@ -83,7 +83,7 @@ class EventosAtencionConsumerTest {
     void eventoValidoSeDelegaAlServicio() {
         var evento = new EventoAtencion(1, "ev-1", EventoAtencion.TYPE_CREADA,
                 Instant.parse("2026-11-10T12:00:00Z"), "atencion-7", "trace-1",
-                new DatosEventoAtencion(7L, "Ana", "Dental", "Box 3", null, "SOLICITADA", null, null));
+                new DatosEventoAtencion(7L, "Dental", "Box 3", null, "SOLICITADA", null, null));
 
         consumer.consumir(registro(evento));
 

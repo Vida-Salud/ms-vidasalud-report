@@ -6,11 +6,13 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDateTime;
 
-/** Payload del evento. estadoAnterior es null en APPOINTMENT_CREATED. */
+/**
+ * Payload del evento. estadoAnterior es null en APPOINTMENT_CREATED. El evento trae además
+ * {@code origen} (servicio e IP), que la reportería no usa y se ignora.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record DatosEventoAtencion(
         @NotNull Long atencionId,
-        String paciente,
         @NotBlank String servicio,
         String box,
         LocalDateTime fechaHora,

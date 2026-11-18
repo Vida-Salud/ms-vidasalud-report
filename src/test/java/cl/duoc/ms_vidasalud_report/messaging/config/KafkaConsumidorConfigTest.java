@@ -21,7 +21,7 @@ import static org.mockito.Mockito.mock;
 
 class KafkaConsumidorConfigTest {
 
-    private static final String DLT = "appointments.events.DLT";
+    private static final String DLT = "appointments.events.report.DLT";
 
     private final KafkaConsumidorConfig config = new KafkaConsumidorConfig();
 
@@ -61,7 +61,7 @@ class KafkaConsumidorConfigTest {
 
         var evento = new EventoAtencion(1, "ev-1", EventoAtencion.TYPE_CREADA,
                 Instant.parse("2026-11-10T12:00:00Z"), null, null,
-                new DatosEventoAtencion(7L, "Ana", "Dental", null, null, "SOLICITADA", null, null));
+                new DatosEventoAtencion(7L, "Dental", null, null, "SOLICITADA", null, null));
         var headers = new RecordHeaders();
         String json = new String(serializer.serialize(DLT, headers, evento), StandardCharsets.UTF_8);
         assertThat(json).contains("\"eventId\":\"ev-1\"", "\"atencionId\":7");

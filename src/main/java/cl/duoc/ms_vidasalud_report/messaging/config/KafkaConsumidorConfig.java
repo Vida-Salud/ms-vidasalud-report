@@ -22,7 +22,7 @@ import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.DelegatingByTypeSerializer;
 import org.springframework.kafka.support.serializer.JacksonJsonSerializer;
-import org.springframework.util.backoff.FixedBackOff;
+import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -37,9 +37,11 @@ public class KafkaConsumidorConfig {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumidorConfig.class);
 
-    /** 1 segundo entre reintentos, 3 reintentos (4 intentos en total) antes de ir al DLT. */
-    static final long ESPERA_REINTENTO_MS = 1000L;
-    static final long REINTENTOS = 3L;
+    /** 3 reintentos (4 intentos en total) a 1 s, 2 s y 4 s antes de ir al DLT. */
+    static final int REINTENTOS = 3;
+    static final long INTERVALO_INICIAL_MS = 1000L;
+    static final double MULTIPLICADOR = 2.0;
+    static final long INTERVALO_MAXIMO_MS = 10_000L;
 
     @Bean
     public NewTopic topicoEventosDlt(@Value("${vidasalud.kafka.topico-dlt}") String topico) {
@@ -87,7 +89,9 @@ public class KafkaConsumidorConfig {
     /**
      * Boot asigna este error handler al container factory del {@code @KafkaListener}.
      * <p>
-     * Errores transitorios (p. ej. Oracle caído): 3 reintentos con 1 segundo de espera y luego DLT.
+     * Errores transitorios (p. ej. Oracle caído): 3 reintentos con espera creciente (1 s, 2 s, 4 s)
+     * para no saturar al recurso que está fallando, y luego DLT. Cada intento fallido queda en el log
+     * con tópico, partición, offset y key.
      * Errores permanentes: directo al DLT, reintentar daría el mismo resultado.
      * {@code DeserializationException} ya viene como no reintentable en la lista por defecto.
      */
@@ -104,7 +108,16 @@ public class KafkaConsumidorConfig {
             dlpr.accept(registro, consumer, error);
         };
 
-        var handler = new DefaultErrorHandler(recoverer, new FixedBackOff(ESPERA_REINTENTO_MS, REINTENTOS));
+        var backOff = new ExponentialBackOffWithMaxRetries(REINTENTOS);
+        backOff.setInitialInterval(INTERVALO_INICIAL_MS);
+        backOff.setMultiplier(MULTIPLICADOR);
+        backOff.setMaxInterval(INTERVALO_MAXIMO_MS);
+
+        var handler = new DefaultErrorHandler(recoverer, backOff);
+        handler.setRetryListeners((registro, error, intento) ->
+                log.warn("Falló el procesamiento, intento {} de {} [topic={}, partition={}, offset={}, key={}]: {}",
+                        intento, REINTENTOS + 1, registro.topic(), registro.partition(), registro.offset(),
+                        registro.key(), error.getMessage()));
         handler.addNotRetryableExceptions(EventoInvalidoException.class);
         return handler;
     }

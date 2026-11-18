@@ -39,10 +39,17 @@ spring:
   kafka:
     # Brokers del clúster Kafka. El cliente solo necesita uno vivo para descubrir el resto.
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092,localhost:9093,localhost:9094}
+    client-id: ${spring.application.name}
     consumer:
+      # Grupo propio de reportería: recibe TODOS los eventos, igual que los grupos de auditoría
+      # (publish-subscribe). Dentro del grupo, las particiones se reparten entre las instancias.
       group-id: report-kpis
       # Un grupo nuevo lee el tópico desde el principio para reconstruir las proyecciones.
       auto-offset-reset: earliest
+      enable-auto-commit: false            # el contenedor confirma el offset recién cuando el registro se procesó
+      max-poll-records: 50                 # lote chico: cada registro escribe en Oracle
+      max-poll-interval: 5m                # tiempo máximo entre polls antes de que el grupo expulse al consumidor
+      heartbeat-interval: 10s
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       # ErrorHandlingDeserializer envuelve al deserializador JSON: un mensaje mal formado no tumba
       # el consumidor, llega al DefaultErrorHandler y de ahí al DLT.
@@ -52,14 +59,19 @@ spring:
         # appointments publica sin headers de tipo: el tipo destino se fija aquí.
         spring.json.value.default.type: cl.duoc.ms_vidasalud_report.messaging.dto.EventoAtencion
         spring.json.use.type.headers: false
+        session.timeout.ms: 30000          # sin latidos por 30 s, el grupo reasigna sus particiones
+        # Rebalanceo incremental: al entrar o salir una instancia solo se mueven las particiones necesarias
+        partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
     listener:
       # Una hebra por partición del tópico (3).
       concurrency: 3
+      ack-mode: record                     # confirma el offset de cada registro procesado
+      missing-topics-fatal: false          # arranca aunque el tópico aún no exista (kafka-init lo crea)
 
 vidasalud:
   kafka:
     topico-eventos: appointments.events
-    topico-dlt: appointments.events.DLT
+    topico-dlt: appointments.events.report.DLT   # un DLT por consumidor: <tópico>.<consumidor>.DLT
 
 logging:
   pattern:
