@@ -7,6 +7,14 @@ spring:
   application:
     name: ms-vidasalud-report
 
+  mvc:
+    problemdetails:
+      enabled: true
+    apiversion:
+      use:
+        path-segment: 1   # /api/{version}/...
+      supported: 1
+
   datasource:
     url: jdbc:oracle:thin:@//${DB_HOST:localhost}:${DB_PORT:1521}/${DB_SERVICE:XEPDB1}
     username: ${DB_USERNAME:vidasalud}
