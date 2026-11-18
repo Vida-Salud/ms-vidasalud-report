@@ -11,8 +11,10 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -22,12 +24,16 @@ import java.util.Map;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Los endpoints de KPIs sobre H2, con un reloj fijo para que los rangos sean deterministas. */
+/**
+ * Los endpoints de KPIs sobre H2, con un reloj fijo para que los rangos sean deterministas.
+ * Todas las peticiones van como Admin; los demás roles se prueban en RolesReporteTest.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -82,7 +88,7 @@ class ReporteControllerTest {
 
     @Test
     void kpisPorDefectoSonDeLasUltimas24Horas() throws Exception {
-        mockMvc.perform(get("/api/v1/report/kpis"))
+        mockMvc.perform(get("/api/v1/report/kpis").with(admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rango").value("last24h"))
                 .andExpect(jsonPath("$.desde").value("2026-11-09T12:30:00Z"))
@@ -102,7 +108,7 @@ class ReporteControllerTest {
 
     @Test
     void kpisDeLosUltimos7DiasSinImportarMayusculas() throws Exception {
-        mockMvc.perform(get("/api/v1/report/kpis").param("range", "Last7D"))
+        mockMvc.perform(get("/api/v1/report/kpis").with(admin()).param("range", "Last7D"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rango").value("last7d"))
                 .andExpect(jsonPath("$.totalAtenciones").value(5))
@@ -114,7 +120,7 @@ class ReporteControllerTest {
     void sinDatosEnElRangoElTiempoDeEsperaEsNull() throws Exception {
         proyeccionRepository.deleteAll();
 
-        mockMvc.perform(get("/api/v1/report/kpis"))
+        mockMvc.perform(get("/api/v1/report/kpis").with(admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalAtenciones").value(0))
                 .andExpect(jsonPath("$.tiempoEsperaPromedioMinutos").doesNotExist())
@@ -123,7 +129,7 @@ class ReporteControllerTest {
 
     @Test
     void topServiciosPorDefectoSonDeLosUltimos7Dias() throws Exception {
-        mockMvc.perform(get("/api/v1/report/top-services"))
+        mockMvc.perform(get("/api/v1/report/top-services").with(admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rango").value("last7d"))
                 .andExpect(jsonPath("$.desde").value("2026-11-03T12:30:00Z"))
@@ -136,7 +142,7 @@ class ReporteControllerTest {
 
     @Test
     void topServiciosRespetaElLimite() throws Exception {
-        mockMvc.perform(get("/api/v1/report/top-services").param("range", "last30d").param("limit", "1"))
+        mockMvc.perform(get("/api/v1/report/top-services").with(admin()).param("range", "last30d").param("limit", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.servicios", hasSize(1)))
                 .andExpect(jsonPath("$.servicios[0].servicio").value("Dental"));
@@ -144,7 +150,7 @@ class ReporteControllerTest {
 
     @Test
     void rangoInvalidoResponde400ConProblemDetail() throws Exception {
-        mockMvc.perform(get("/api/v1/report/kpis").param("range", "last1y"))
+        mockMvc.perform(get("/api/v1/report/kpis").with(admin()).param("range", "last1y"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(400))
@@ -154,7 +160,7 @@ class ReporteControllerTest {
     @Test
     void limiteFueraDeRangoResponde400ConProblemDetail() throws Exception {
         for (String limite : new String[] {"0", "21"}) {
-            mockMvc.perform(get("/api/v1/report/top-services").param("limit", limite))
+            mockMvc.perform(get("/api/v1/report/top-services").with(admin()).param("limit", limite))
                     .andExpect(status().isBadRequest())
                     .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                     .andExpect(jsonPath("$.errores.limit").value("debe estar entre 1 y 20"));
@@ -163,14 +169,14 @@ class ReporteControllerTest {
 
     @Test
     void limiteNoNumericoResponde400() throws Exception {
-        mockMvc.perform(get("/api/v1/report/top-services").param("limit", "abc"))
+        mockMvc.perform(get("/api/v1/report/top-services").with(admin()).param("limit", "abc"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errores.limit").value("Valor inválido"));
     }
 
     @Test
     void versionNoSoportadaResponde400() throws Exception {
-        mockMvc.perform(get("/api/v9/report/kpis"))
+        mockMvc.perform(get("/api/v9/report/kpis").with(admin()))
                 .andExpect(status().isBadRequest());
     }
 
@@ -182,5 +188,9 @@ class ReporteControllerTest {
         var proyeccion = new ProyeccionAtencion(id, servicio, ultima.getKey(), Instant.parse(ultima.getValue()));
         fechas.forEach((estado, fecha) -> proyeccion.registrarFechaDeEstado(estado, Instant.parse(fecha)));
         return proyeccion;
+    }
+
+    private static RequestPostProcessor admin() {
+        return jwt().authorities(new SimpleGrantedAuthority("APPROLE_Admin"));
     }
 }
